@@ -4,22 +4,36 @@
 
 import Y from 'yjs';
 import yWebsocketsServer from 'y-websockets-server';
-import yMemory from 'y-memory';
+import yleveldb from 'y-leveldb';
 
 import minimist from 'minimist';
 import socketIo from 'socket.io';
 import http from 'http';
 import Router from 'router';
 import finalhandler from 'finalhandler';
+import { join, sep } from 'path';
+import { lstatSync, readdirSync } from 'fs';
 
-Y.extend(yWebsocketsServer, yMemory);
+Y.extend(yWebsocketsServer, yleveldb);
+
+const isDirectory = (source) => {
+  try {
+    return lstatSync(source).isDirectory();
+  } catch (e) {
+    console.log(e);
+    return false;
+  }
+};
+
+const getDirectories = source => (isDirectory(source) ? readdirSync(source).map(name => join(source, name)).filter(isDirectory) : []);
+
 
 const options = minimist(process.argv.slice(2), {
   string: ['port', 'debug', 'db'],
   default: {
     port: process.env.PORT || '1234',
     debug: false,
-    db: 'memory',
+    db: 'leveldb',
   },
 });
 
@@ -31,7 +45,8 @@ const server = http.createServer((req, res) => {
 const io = socketIo.listen(server);
 
 const yInstances = {};
-const metadata = {};
+const dirs = getDirectories('y-leveldb-databases').map(p => p.split(sep)[1]);
+const metadata = dirs.reduce((accumulator, d) => Object.assign(accumulator, { [d]: {} }), {});
 
 function getInstanceOfY(room) {
   if (yInstances[room] == null) {
